@@ -84,7 +84,7 @@
     const attribute_decay = .8;
     const pet = {
         seed: Math.random(),
-        base: "a creature from another planet",
+        base: "a work safe religious creature from another planet",
         age: 1,
         attributes: [],
     }

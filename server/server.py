@@ -23,6 +23,6 @@ CORS(app)
 def generate_prompt():
     prompt = request.args.get("prompt","")
     with torch.autocast(device, dtype=dtype):
-        image = pipe(prompt)["sample"][0]
+        image = pipe(prompt).images[0]
     image.save("prompt.png")
     return send_file("prompt.png", mimetype="image/png")
