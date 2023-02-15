@@ -71,25 +71,54 @@
         }
     }
 
-    function fetch_image(prompt){
-        return fetch("http://127.0.0.1:5000/?prompt="+encodeURIComponent(prompt)).then((res) => {
-            return res.blob();
+    function fetch_image(seed, prev_img, prompt){
+        const params = {
+            sampler_name: "DPM++ SDE Karras",
+            // sampler_name: "DPM fast",
+            steps: 20,
+            override_settings: {
+                do_not_add_watermark: true,
+                // sd_model_checkpoint: "dreamshaper_332BakedVaeClipFix.safetensors [13dfc9921f]",
+            },
+            seed: Math.floor(Math.random()*100000000),
+            prompt,
+            denoising_strength: 0.5,
+            negative_prompt: "((watermark)), ((signature)), sphere, orb, ball, canvas frame, cartoon, 3d, ((bad art)), ((close up)),((b&w)), wierd colors, blurry, (((duplicate))), [out of frame], blurry, ugly, Photoshop, video game, ugly, tiling, out of frame, body out of frame, blurry, 3d render"
+        };
+        let endpoint = "txt2img";
+        if (prev_img){
+            console.log("using image as base:", prev_img)
+            endpoint = "img2img";
+            params.init_images = [prev_img];
+            params.include_init_images = true;
+        }
+        return fetch("http://localhost:7860/sdapi/v1/"+endpoint, {
+            method: "POST",
+            body: JSON.stringify(params),
+            headers: {
+                "Content-Type": "application/json"
+            },
+            credentials: "omit"
+        }).then(data => data.json()).then(json => {
+            return "data:image/png;base64,"+json.images[0];
         });
     }
 </script>
 
 <script>
     import {onMount} from "svelte";
+    const age_increment = 7;
     const set_size = 4;
     const attribute_decay = .8;
     const pet = {
-        seed: Math.random(),
-        base: "a work safe religious creature from another planet",
+        seed: Math.round(Math.random()*10000000),
+        base: "creature from another planet, hyperrealistic, beautiful 4k photograph, octane render, natural colors, Bokeh, Wildlife Photography, DSLR, Nikon D750, Lens Distortion",
         age: 1,
         attributes: [],
     }
     let modifiers = [];
-    let blob;
+    let blob = ["",""];
+    let active_blob = 0;
 
     function next_set(){
         for (let i=0; i<set_size; i++)
@@ -105,21 +134,19 @@
     async function generate_text(initial=false){
         if (!initial)
             next_set();
-        let prompt_str = [pet.base, pet.age+" years old"];
-        pet.age += 5;
-        let weight = 1;
+        let prompt_str = [pet.age+ " years old "+pet.base];
+        pet.age += age_increment;
         for (let i=pet.attributes.length-1; i>=0; i--){
-            prompt_str.push(pet.attributes[i]+":"+weight.toFixed(4));
-            weight *= attribute_decay;
+            const w = .5*((i+1)/pet.attributes.length) + .5;
+            prompt_str.push(`(${pet.attributes[i]}:${w.toFixed(4)})`);
         }
         prompt_str = prompt_str.join(", ");
-        // render image on screen
-        const blob_raw = await fetch_image(prompt_str);
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            blob = `url(${e.target.result})`;
-        };
-        reader.readAsDataURL(blob_raw);
+        console.log("fetching image:", prompt_str);
+        // render image on screen; double buffered for transition effect
+        const b64 = await fetch_image(pet.seed, blob[active_blob], prompt_str);
+        active_blob ^= 1;
+        blob[active_blob] = b64;
+        blob = blob;
     }
 
     onMount(() => {
@@ -156,7 +183,6 @@
         
         .window{
             background-color: black;
-            box-shadow:0 -.5rem 1rem .5rem rgba(0,0,0,.8);
             max-width:512px;
             max-height:512px;
             width:80%;
@@ -165,11 +191,33 @@
             position:relative;
             background-size:cover;
             background-repeat:no-repeat;
+            border:1.5rem solid #373737;
+            border-bottom-width:0;
+            border-top-color:black;
+	        box-shadow:0 0 2rem black inset;
+
+            &>img{
+                position:absolute;
+                width:100%;
+                height:100%;
+                left:0;
+                top:0;
+                opacity:0;
+                filter:blur(1rem);
+                transition:opacity 1000ms linear, filter 1000ms linear;
+                // z-index:1;
+                &.active{
+                    opacity:1;
+                    filter:blur(0rem);
+                    // z-index:2;
+                }
+            }
 
             // glass effect
             &::before{
                 content:"";
                 position:absolute;
+                z-index:3;
                 left:0;
                 right:0;
                 top:0;
@@ -187,9 +235,10 @@
                 margin-left:-10%;
                 position:absolute;
                 bottom:-10%;
-                left:-10%;
+                left:0%;
                 right:-10%;
                 height:10%;
+                box-sizing:border-box;
                 box-shadow:0 1rem 2rem .5rem rgba(0,0,0,.8);
                 border-radius:.5rem;
                 border-top:.25rem solid rgb(90, 32, 1);
@@ -216,10 +265,12 @@
 </style>
 
 <main>
-    <div class="window" style:background-image={blob}>
+    <div class="window">
+        <img src={blob[0]} class:active={active_blob == 0}>
+        <img src={blob[1]} class:active={active_blob == 1}>
         <div class="bwood">
-            {#each modifiers as m, mi (m.name)}
-                <span on:click={() => select_modifier(m)}>{m.name}</span>
+            {#each modifiers as m, mi (mi)}
+                <span on:click={() => select_modifier(m)} title={m.word}>{m.name}</span>
             {/each}
         </div>
     </div>
