@@ -16,5 +16,7 @@ Run the client:
 
 It will give you a link to the local address to view.
 
+- Click an emoji to interact with the pet; each interaction alters how the pet grows older (hover to see a tooltip for what it modifies)
 - Refresh to get a new pet
-- Hover emoji to see a tooltip for what it will modify
+
+![Screenshot](./screenshot.png?raw=true "Virtual pet screenshot")
